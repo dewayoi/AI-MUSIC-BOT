@@ -1,0 +1,52 @@
+const groq = require("./groq");
+
+async function generateMetadata(
+  title,
+  genre,
+  mood
+) {
+
+  const response =
+    await groq.chat.completions.create({
+
+      model: "llama-3.3-70b-versatile",
+
+      messages: [
+
+        {
+          role: "system",
+          content:
+            "You are a YouTube music SEO expert.",
+        },
+
+        {
+          role: "user",
+          content: `
+Create YouTube metadata.
+
+Title:
+${title}
+
+Genre:
+${genre}
+
+Mood:
+${mood}
+
+Generate:
+
+1. YouTube description
+2. Tags
+3. Thumbnail image prompt
+`,
+        },
+
+      ],
+
+    });
+
+  return response.choices[0].message.content;
+
+}
+
+module.exports = generateMetadata;
