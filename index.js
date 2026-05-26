@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const fs = require("fs");
 const TelegramBot = require("node-telegram-bot-api");
 const loadPrompt = require("./services/promptLoader");
 const saveOutput = require("./services/saveOutput");
