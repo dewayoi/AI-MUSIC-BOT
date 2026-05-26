@@ -2,3 +2,4 @@ node_modules
 .env
 output
 database/music.db
+old

@@ -1,167 +1,133 @@
 const fs = require("fs");
 const path = require("path");
-const generateTitle = require("./titleGenerator");
 const generateLyrics = require("./lyricsGenerator");
-const saveOutput = require("./saveOutput");
-const loadPrompt = require("./promptLoader");
-const saveToDatabase = require("./saveToDatabase");
 const generateMetadata = require("./metadataGenerator");
 const generateVisualPrompt = require("./visualPromptGenerator");
+const loadPrompt = require("./promptLoader");
 const generateImage = require("./imageGenerator");
-const generateAudio = require("./audioGenerator");
 const generateVideo = require("./videoGenerator");
+const generateAudio = require("./audioGenerator");
+const saveOutput = require("./saveOutput");
+const saveToDatabase = require("./saveToDatabase");
 
-async function generateBatch(
-  genre,
-  mood,
-  total
-) {
 
-  const results = [];
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-  for (let i = 0; i < total; i++) {
+// Fungsi internal untuk menghasilkan satu lagu, menggunakan genre dan mood yang diberikan
+async function generateSingleSongInternal(songIndex, totalSongs, genre, mood) {
+    const title = `${mood} ${genre} ${Date.now()}`;
 
-    const title = generateTitle();
+    console.log(`\n--- Song ${songIndex + 1}/${totalSongs} ---`);
 
-    const lyrics = await generateLyrics(
-      genre,
-      mood
-    );
-    const metadata = await generateMetadata(
-    title,
-    genre,
-    mood
-    );
-    const visualPrompt = await generateVisualPrompt(
-    genre,
-    mood
-    );
-    await generateImage(
-    visualPrompt,
-    title
-    );
+    // 1. DATA GENERATION
+    const lyrics = await generateLyrics(genre, mood);
+    const metadata = await generateMetadata(title, genre, mood);
+    const visualPrompt = await generateVisualPrompt(genre, mood);
+    const basePrompt = loadPrompt(genre);
+    const finalPrompt = `TITLE:\n${title}\n\n${basePrompt}\n\nMood:\n${mood}`;
 
-    const imagePath =
-    `outputs/images/${title}.png`;
+    // 2. ASSET GENERATION (Image -> Video -> Audio)
+    // Image
+    await generateImage(visualPrompt, title);
+    const imagePath = path.join(process.cwd(), "outputs", "images", `${title}.png`);
 
-    const videoPath =
-    `outputs/videos/${title}.mp4`;
-
+    // Video
+    const videoPath = path.join(process.cwd(), "outputs", "videos", `${title}.mp4`);
     const videoDir = path.dirname(videoPath);
     if (!fs.existsSync(videoDir)) {
       fs.mkdirSync(videoDir, { recursive: true });
     }
+    await generateVideo(imagePath, videoPath);
 
-    await generateVideo(
-    imagePath,
-    videoPath
-    );
-
+    // Audio
     let audioResult;
-
     if (process.env.USE_DUMMY_AUDIO === "true") {
-
-    audioResult = {
-
-    audioPath: "./assets/dummy.wav",
-
-    status: "dummy",
-
-     };
-
+      audioResult = {
+        audioPath: path.join(process.cwd(), "assets", "dummy.wav"),
+        status: "dummy",
+      };
     } else {
-
-    audioResult = await generateAudio({
-      title,
-      genre,
-      mood,
-      lyrics
-    });
-
+      audioResult = await generateAudio({ title, genre, mood, lyrics });
     }
 
-    const basePrompt = loadPrompt(genre);
+    // 3. STORAGE ORGANIZATION
+    const slug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
 
-    const finalPrompt = `
-TITLE:
-${title}
+    const songFolder = path.join(process.cwd(), "songs", slug);
+    if (!fs.existsSync(songFolder)) {
+      fs.mkdirSync(songFolder, { recursive: true });
+    }
 
-${basePrompt}
+    const audioExtension = path.extname(audioResult.audioPath);
+    const finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
+    const finalVideoPath = path.join(songFolder, "video.mp4");
 
-Mood:
-${mood}
-`;
+    // Salin file ke folder tujuan (Fix bug destDir & ENOENT)
+    if (fs.existsSync(videoPath)) {
+      fs.copyFileSync(videoPath, finalVideoPath);
+    }
+    fs.copyFileSync(audioResult.audioPath, finalAudioPath);
 
-const slug = title
-  .toLowerCase()
-  .replace(/[^a-z0-9]+/g, "-")
-  .replace(/^-|-$/g, "");
-
-const songFolder = path.join(__dirname, "songs", slug);
-if (!fs.existsSync(songFolder)) {
-  fs.mkdirSync(songFolder, { recursive: true });
-}
-
+    // 4. PERSISTENCE (Save to Database & Files)
     const songData = {
-    id: Date.now(),
-
-    title,
-    genre,
-    mood,
-    lyrics,
-    metadata,
-    visualPrompt,
-    prompt: finalPrompt,
-
-    audioPath: audioResult.audioPath,
-    audioStatus: audioResult.status,
-
-    videoPath,
-
-    status: "completed",
-
-    created_at: new Date(),
+      id: Date.now(),
+      title, genre, mood, lyrics, metadata, visualPrompt,
+      prompt: finalPrompt,
+      audioPath: finalAudioPath,
+      audioStatus: audioResult.status,
+      videoPath: finalVideoPath,
+      status: "completed",
+      created_at: new Date(),
     };
 
+    // Simpan ke database JSON utama
     const dbPath = path.join(process.cwd(), "songs", "database.json");
-
     let database = [];
-
-    const dbDir = path.dirname(dbPath);
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
-
+    if (!fs.existsSync(path.dirname(dbPath))) fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     if (fs.existsSync(dbPath)) {
-    const rawData = fs.readFileSync(dbPath);
-    database = JSON.parse(rawData);
+      database = JSON.parse(fs.readFileSync(dbPath));
     }
-
     database.push(songData);
-
-    fs.writeFileSync(
-    dbPath,
-    JSON.stringify(database, null, 2)
-    );
-    fs.writeFileSync(
-    path.join(songFolder, "lyrics.txt"),
-    lyrics
-    );
-    fs.writeFileSync(
-    path.join(songFolder, "metadata.json"),
-    JSON.stringify(songData, null, 2)
-    );
-
-    console.log("Song saved to database");
+    fs.writeFileSync(dbPath, JSON.stringify(database, null, 2));
+    
+    // Simpan file teks di folder lagu
+    fs.writeFileSync(path.join(songFolder, "lyrics.txt"), lyrics);
+    fs.writeFileSync(path.join(songFolder, "metadata.json"), JSON.stringify(songData, null, 2));
 
     saveOutput(songData);
     saveToDatabase(songData);
 
-    results.push(songData);
-
+      console.log(`Successfully generated and organized: ${title}`);
+    return songData;
   }
 
-  return results;
+    // Fungsi yang diekspor untuk menghasilkan batch lagu
+    async function generateBatch(genre, mood, total) {
+    const generatedSongs = [];
+    for (let i = 0; i < config.SONGS_PER_BATCH; i++) {
+        try {
+            const songData = await generateSingleSongInternal(i, total, genre, mood);
+            generatedSongs.push(songData);
+        } catch (error) {
+            console.error(`Error generating song ${i + 1} (Genre: ${genre}, Mood: ${mood}):`, error);
+            // Menambahkan objek lagu gagal agar panjang array hasil konsisten
+            generatedSongs.push({
+                title: `Failed Song ${i + 1}`,
+                genre,
+                mood,
+                status: "failed",
+                error: error.message,
+                created_at: new Date(),
+            });
+        }
+        await sleep(3000);
+    }
+    return generatedSongs;
 }
 
 module.exports = generateBatch;

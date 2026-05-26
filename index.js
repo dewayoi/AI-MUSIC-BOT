@@ -9,6 +9,7 @@ const generateLyrics = require("./services/lyricsGenerator");
 const generateBatch = require("./services/batchGenerator");
 const { addToQueue, getQueue } = require("./services/queue");
 const db = require("./database/db");
+const config = require("./config");
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, {
 	polling: true,
