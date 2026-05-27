@@ -13,7 +13,7 @@ async function generateImage(prompt, filename) {
   const response = await axios({
     url: imageUrl,
     responseType: "arraybuffer",
-    timeout: 60000 // Beri waktu 60 detik untuk generate
+    timeout: 120000 // Beri waktu 60 detik untuk generate
   });
 
   // Buat folder jika belum ada

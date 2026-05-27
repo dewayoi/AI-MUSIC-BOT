@@ -1,6 +1,6 @@
 module.exports = {
 
-  SONGS_PER_BATCH: 10,
+  SONGS_PER_BATCH: 2,
 
   OUTPUT_DIR: "songs",
 

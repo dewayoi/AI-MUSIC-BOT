@@ -2,13 +2,15 @@ const fs = require("fs");
 const path = require("path");
 const generateLyrics = require("./lyricsGenerator");
 const generateMetadata = require("./metadataGenerator");
+const generateTitle = require("./titleGenerator"); // Added missing import
 const generateVisualPrompt = require("./visualPromptGenerator");
 const loadPrompt = require("./promptLoader");
 const generateImage = require("./imageGenerator");
 const generateVideo = require("./videoGenerator");
-const generateAudio = require("./audioGenerator");
+const { getAudioProvider } = require("../providers/audio");
 const saveOutput = require("./saveOutput");
 const saveToDatabase = require("./saveToDatabase");
+const config = require("../config"); // Added missing import
 
 
 function sleep(ms) {
@@ -17,7 +19,7 @@ function sleep(ms) {
 
 // Fungsi internal untuk menghasilkan satu lagu, menggunakan genre dan mood yang diberikan
 async function generateSingleSongInternal(songIndex, totalSongs, genre, mood) {
-    const title = `${mood} ${genre} ${Date.now()}`;
+    const title = generateTitle(); // Use generateTitle function
 
     console.log(`\n--- Song ${songIndex + 1}/${totalSongs} ---`);
 
@@ -42,15 +44,13 @@ async function generateSingleSongInternal(songIndex, totalSongs, genre, mood) {
     await generateVideo(imagePath, videoPath);
 
     // Audio
-    let audioResult;
-    if (process.env.USE_DUMMY_AUDIO === "true") {
-      audioResult = {
-        audioPath: path.join(process.cwd(), "assets", "dummy.wav"),
-        status: "dummy",
-      };
-    } else {
-      audioResult = await generateAudio({ title, genre, mood, lyrics });
-    }
+    const audioProvider = getAudioProvider();
+    const audioResult = await audioProvider.generateAudio({
+      title,
+      genre,
+      mood,
+      lyrics,
+    });
 
     // 3. STORAGE ORGANIZATION
     const slug = title
