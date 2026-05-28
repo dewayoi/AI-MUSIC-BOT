@@ -7,15 +7,8 @@ function generateVideo(
 
   return new Promise((resolve, reject) => {
 
-    const command = `
-ffmpeg
--loop 1
--i "${imagePath}"
--c:v libx264
--t 30
--pix_fmt yuv420p
-"${outputPath}"
-`;
+    // Gabungkan command menjadi satu baris untuk stabilitas exec
+    const command = `ffmpeg -y -loop 1 -i "${imagePath}" -c:v libx264 -t 30 -pix_fmt yuv420p "${outputPath}"`;
 
     exec(command, (error) => {
 

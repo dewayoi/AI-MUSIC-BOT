@@ -31,17 +31,33 @@ function isRecentlyUsedGenre(
   genre,
   limit = 5
 ) {
-
   const recentSongs =
     getRecentSongs(limit);
 
   return recentSongs.some(
     song => song.genre === genre
   );
+}
 
+function isDuplicateTitle(title) {
+  const history = getHistory();
+
+  return history.some(song => {
+
+    if (!song.title) {
+      return false;
+    }
+
+    return (
+      song.title.toLowerCase() ===
+      title.toLowerCase()
+    );
+
+  });
 }
 module.exports = {
   getHistory,
   getRecentSongs,
-  isRecentlyUsedGenre
+  isRecentlyUsedGenre,
+  isDuplicateTitle,
 };

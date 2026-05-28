@@ -6,6 +6,8 @@ module.exports = {
 
   AUDIO_PROVIDER: "dummy",
 
+  IMAGE_PROVIDER: "dummy",
+
   VIDEO_PROVIDER: "ffmpeg",
 
   GENRES: [
