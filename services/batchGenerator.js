@@ -4,13 +4,14 @@ const generateLyrics = require("./lyricsGenerator");
 const generateMetadata = require("./metadataGenerator");
 const generateTitle = require("./titleGenerator"); // Added missing import
 const generateVisualPrompt = require("./visualPromptGenerator");
-const loadPrompt = require("./promptLoader");
+const { buildPrompt } = require("../prompts/buildPrompt");
 const generateImage = require("./imageGenerator");
 const generateVideo = require("./videoGenerator");
 const { getAudioProvider } = require("../providers/audio");
 const saveOutput = require("./saveOutput");
 const saveToDatabase = require("./saveToDatabase");
 const config = require("../config"); // Added missing import
+const { generateContentPlan } = require("../brain/contentBrain");
 
 
 function sleep(ms) {
@@ -18,7 +19,7 @@ function sleep(ms) {
 }
 
 // Fungsi internal untuk menghasilkan satu lagu, menggunakan genre dan mood yang diberikan
-async function generateSingleSongInternal(songIndex, totalSongs, genre, mood) {
+async function generateSingleSongInternal(songIndex, totalSongs, genre, mood, contentPlan) {
     const title = generateTitle(); // Use generateTitle function
 
     console.log(`\n--- Song ${songIndex + 1}/${totalSongs} ---`);
@@ -27,8 +28,12 @@ async function generateSingleSongInternal(songIndex, totalSongs, genre, mood) {
     const lyrics = await generateLyrics(genre, mood);
     const metadata = await generateMetadata(title, genre, mood);
     const visualPrompt = await generateVisualPrompt(genre, mood);
-    const basePrompt = loadPrompt(genre);
-    const finalPrompt = `TITLE:\n${title}\n\n${basePrompt}\n\nMood:\n${mood}`;
+    const finalPrompt = buildPrompt({
+      title,
+      genre,
+      mood,
+      ...contentPlan
+    });
 
     // 2. ASSET GENERATION (Image -> Video -> Audio)
     // Image
@@ -108,10 +113,16 @@ async function generateSingleSongInternal(songIndex, totalSongs, genre, mood) {
 
     // Fungsi yang diekspor untuk menghasilkan batch lagu
     async function generateBatch(genre, mood, total) {
+    const contentPlan = generateContentPlan("youtube_lofi");
+
+    // Gunakan genre/mood dari plan jika tersedia, jika tidak gunakan input manual
+    const targetGenre = contentPlan.genre || genre;
+    const targetMood = contentPlan.mood || mood;
+
     const generatedSongs = [];
     for (let i = 0; i < config.SONGS_PER_BATCH; i++) {
         try {
-            const songData = await generateSingleSongInternal(i, total, genre, mood);
+            const songData = await generateSingleSongInternal(i, total, targetGenre, targetMood, contentPlan);
             generatedSongs.push(songData);
         } catch (error) {
             console.error(`Error generating song ${i + 1} (Genre: ${genre}, Mood: ${mood}):`, error);

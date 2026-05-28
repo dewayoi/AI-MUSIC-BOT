@@ -1,27 +1,8 @@
-const genres = config.GENRES[
-  "Synthwave",
-  "LoFi",
-  "Phonk",
-  "EDM",
-  "Ambient"
-];
+const { generateContentPlan } = require("./brain/contentBrain");
 
-const moods = config.MOODS[
-  "Sad",
-  "Happy",
-  "Energetic",
-  "Aggressive",
-  "Dark",
-  "Energetic",
-  "Dreamy",
-  "Emotional"
-];
-
-const genre =
-  genres[Math.floor(Math.random() * genres.length)];
-
-const mood =
-  moods[Math.floor(Math.random() * moods.length)];
+const contentPlan = generateContentPlan("youtube_lofi");
+const genre = contentPlan.genre;
+const mood = contentPlan.mood;
 
 const title = `${mood} ${genre} ${Date.now()}`;
 
