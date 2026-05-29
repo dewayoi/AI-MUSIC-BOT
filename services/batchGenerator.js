@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const generateLyrics = require("./lyricsGenerator");
 const generateMetadata = require("./metadataGenerator");
-const { generateTitle } = require("./titleGenerator"); // Added missing import
+const { generateTitle } = require("./titleGenerator");
 const generateVisualPrompt = require("./visualPromptGenerator");
 const { buildThumbnailPrompt } = require("../thumbnail/buildThumbnailPrompt");
 const { buildPrompt } = require("../prompts/buildPrompt");
@@ -12,7 +12,7 @@ const { getAudioProvider } = require("../providers/audio");
 const { getImageProvider } = require("../providers/image");
 const saveOutput = require("./saveOutput");
 const saveToDatabase = require("./saveToDatabase");
-const config = require("../config"); // Added missing import
+const config = require("../config");
 const { generateContentPlan } = require("../brain/contentBrain");
 
 function sleep(ms) {
@@ -28,20 +28,23 @@ async function generateSingleSongInternal(
   contentPlan,
   onProgress,
 ) {
-  const title = generateTitle(genre); // Use generateTitle function
-
-  console.log(`\n--- Song ${songIndex + 1}/${totalSongs} ---`);
-  if (onProgress)
-    onProgress(`⏳ Processing song ${songIndex + 1}/${totalSongs}: *${title}*`);
-
-  // 0. PREPARASI FOLDER
+  const timestamp = Date.now();
+  const title = generateTitle(genre);
+  
   // Slug harus bersih agar tidak ENOENT saat mkdir
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-  const songFolder = path.join(process.cwd(), "songs", slug);
+  const folderName = `${timestamp}-${slug}`;
+  const songFolder = path.join(process.cwd(), "songs", folderName);
+
+  console.log(`\n--- Song ${songIndex + 1}/${totalSongs} --- `);
+  if (onProgress)
+    onProgress(`⏳ Processing song ${songIndex + 1}/${totalSongs}: *${title}*`);
+
+  // 0. PREPARASI FOLDER
   if (!fs.existsSync(songFolder)) {
     fs.mkdirSync(songFolder, { recursive: true });
   }
@@ -59,7 +62,6 @@ async function generateSingleSongInternal(
   });
 
   // 1.1 SIMPAN LIRIK & METADATA AWAL (Fail-safe)
-  // Kita simpan lirik segera setelah digenerate agar tidak hilang jika aset gagal
   fs.writeFileSync(path.join(songFolder, "lyrics.txt"), lyrics || "");
   console.log(`📝 Lyrics saved for: ${title}`);
 
@@ -71,20 +73,22 @@ async function generateSingleSongInternal(
 
   const thumbnailPath = path.join(songFolder, "thumbnail.png");
 
-  // FIX: Gunakan AI generator langsung untuk thumbnail agar tidak dummy
+  // thumbnail generation
   let thumbnailResult = { imagePath: null };
   try {
-    // Panggil generateImage AI dan arahkan output langsung ke folder lagu
-    await generateImage(thumbnailPrompt, "thumbnail-temp");
+    const tempThumbnailName = `thumbnail-${timestamp}`;
+    await generateImage(thumbnailPrompt, tempThumbnailName);
     const tempAiPath = path.join(
       process.cwd(),
       "outputs",
       "images",
-      "thumbnail-temp.png",
+      `${tempThumbnailName}.png`,
     );
     if (fs.existsSync(tempAiPath)) {
       fs.copyFileSync(tempAiPath, thumbnailPath);
       thumbnailResult.imagePath = thumbnailPath;
+      // Clean up temp
+      try { fs.unlinkSync(tempAiPath); } catch (e) {}
     }
   } catch (e) {
     console.warn(
@@ -94,32 +98,32 @@ async function generateSingleSongInternal(
   }
 
   // 2. ASSET GENERATION (Image -> Video -> Audio)
-  // Gunakan 'slug' untuk filename agar aman dari karakter ilegal di Windows (?, :, |, etc)
-  const imagePath = path.join(
-    process.cwd(),
-    "outputs",
-    "images",
-    `${slug}.png`,
-  );
-  const videoPath = path.join(
-    process.cwd(),
-    "outputs",
-    "videos",
-    `${slug}.mp4`,
-  );
+  const imagePath = path.join(songFolder, "image.png");
+  const videoPath = path.join(songFolder, "video.mp4");
 
   try {
     // Image
-    await generateImage(visualPrompt, slug);
+    const tempImageName = `image-${timestamp}`;
+    await generateImage(visualPrompt, tempImageName);
+    const tempImagePath = path.join(
+      process.cwd(),
+      "outputs",
+      "images",
+      `${tempImageName}.png`,
+    );
+    if (fs.existsSync(tempImagePath)) {
+      fs.copyFileSync(tempImagePath, imagePath);
+      // Clean up temp
+      try { fs.unlinkSync(tempImagePath); } catch (e) {}
+    }
 
     // Video
-    const videoDir = path.dirname(videoPath);
-    if (!fs.existsSync(videoDir)) {
-      fs.mkdirSync(videoDir, { recursive: true });
-    }
+    // We need a temp video path in outputs/videos if generateVideo expects it there
+    // but better if we can render directly to songFolder. 
+    // FFmpeg usually allows any path.
     await generateVideo(imagePath, videoPath);
   } catch (e) {
-    console.error(`❌ Visual generation failed for ${title}:`, e.message);
+    console.error(`❌ Visual generation failed for ${title}: `, e.message);
     if (onProgress)
       onProgress(`⚠️ Visual/Video failed for *${title}*, continuing...`);
   }
@@ -135,41 +139,21 @@ async function generateSingleSongInternal(
         mood,
         lyrics,
       })) || audioResult;
+      
+    if (audioResult && audioResult.audioPath && fs.existsSync(audioResult.audioPath)) {
+        const audioExtension = path.extname(audioResult.audioPath);
+        const finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
+        fs.copyFileSync(audioResult.audioPath, finalAudioPath);
+        audioResult.finalPath = finalAudioPath;
+    }
   } catch (e) {
-    console.error(`❌ Audio generation failed for ${title}:`, e.message);
+    console.error(`❌ Audio generation failed for ${title}: `, e.message);
     if (onProgress) onProgress(`⚠️ Audio failed for *${title}*`);
-  }
-
-  // 3. STORAGE ORGANIZATION
-  let finalAudioPath = null;
-  let finalVideoPath = null;
-
-  try {
-    if (videoPath && fs.existsSync(videoPath)) {
-      finalVideoPath = path.join(songFolder, "video.mp4");
-      fs.copyFileSync(videoPath, finalVideoPath);
-    }
-  } catch (err) {
-    console.error("Video copy failed:", err.message);
-  }
-
-  try {
-    if (
-      audioResult &&
-      audioResult.audioPath &&
-      fs.existsSync(audioResult.audioPath)
-    ) {
-      const audioExtension = path.extname(audioResult.audioPath);
-      finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
-      fs.copyFileSync(audioResult.audioPath, finalAudioPath);
-    }
-  } catch (err) {
-    console.error("Audio copy failed:", err.message);
   }
 
   // 4. PERSISTENCE (Save to Database & Files)
   const songData = {
-    id: Date.now(),
+    id: timestamp,
     title,
     genre,
     mood,
@@ -177,11 +161,11 @@ async function generateSingleSongInternal(
     metadata,
     visualPrompt,
     prompt: finalPrompt,
-    audioPath: finalAudioPath,
+    audioPath: audioResult.finalPath || null,
     audioStatus: audioResult.status,
-    videoPath: finalVideoPath,
+    videoPath: fs.existsSync(videoPath) ? videoPath : null,
     thumbnailPrompt,
-    thumbnailPath: thumbnailResult.imagePath || thumbnailPath,
+    thumbnailPath: thumbnailResult.imagePath || null,
     status: "completed",
     created_at: new Date(),
   };
@@ -208,12 +192,10 @@ async function generateSingleSongInternal(
 async function generateBatch(genre, mood, total, onProgress) {
   const contentPlan = await generateContentPlan("youtube_lofi");
 
-  // Gunakan genre/mood dari plan jika tersedia, jika tidak gunakan input manual
   const targetGenre = contentPlan.genre || genre;
   const targetMood = contentPlan.mood || mood;
 
   const generatedSongs = [];
-  // Gunakan parameter 'total' dari user, bukan config
   for (let i = 0; i < total; i++) {
     try {
       const songData = await generateSingleSongInternal(
@@ -232,7 +214,6 @@ async function generateBatch(genre, mood, total, onProgress) {
       );
       if (onProgress)
         onProgress(`❌ Gagal generate lagu ke-${i + 1}: ${error.message}`);
-      // Menambahkan objek lagu gagal agar panjang array hasil konsisten
       generatedSongs.push({
         title: `Failed Song ${i + 1}`,
         genre,
