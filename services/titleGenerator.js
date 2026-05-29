@@ -1,3 +1,5 @@
+const { isDuplicateTitle } = require("../brain/memory");
+
 const titleStyles = {
   LoFi: {
     adjectives: ["Midnight", "Dreamy", "Rainy", "Silent", "Blue", "Lonely"],
@@ -22,7 +24,11 @@ function randomItem(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
-function generateTitle(genre) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function _generateTitle(genre) {
   const style = titleStyles[genre];
 
   if (!style) {
@@ -34,6 +40,23 @@ function generateTitle(genre) {
   const noun = randomItem(style.nouns);
 
   return `${adjective} ${noun}`;
+}
+
+async function generateTitle(genre) {
+  let attempts = 0;
+  const MAX_ATTEMPTS = 10;
+  do {
+    title = _generateTitle(genre);
+    attempts++;
+    if (attempts >= MAX_ATTEMPTS) {
+      console.warn(
+        "Mencapai batas percobaan untuk generate judul unik. Menggunakan judul duplikat.",
+      );
+      break; // Keluar dari loop jika mencapai batas percobaan
+    }
+    await sleep(100); // Jeda singkat agar tidak memblokir CPU
+  } while (await isDuplicateTitle(title));
+  return title;
 }
 
 module.exports = {

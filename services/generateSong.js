@@ -1,5 +1,4 @@
 const { generateContentPlan } = require("../brain/contentBrain");
-const { isDuplicateTitle } = require("../brain/memory");
 const { generateTitle } = require("./titleGenerator");
 
 function sleep(ms) {
@@ -13,21 +12,7 @@ async function generateSong() {
     const genre = contentPlan.genre;
     const mood = contentPlan.mood;
 
-    let title;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 10; // Batasi percobaan untuk menghindari infinite loop
-
-    do {
-      title = generateTitle(genre);
-      attempts++;
-      if (attempts >= MAX_ATTEMPTS) {
-        console.warn(
-          "Mencapai batas percobaan untuk generate judul unik. Menggunakan judul duplikat.",
-        );
-        break; // Keluar dari loop jika mencapai batas percobaan
-      }
-      await sleep(100); // Jeda singkat agar tidak memblokir CPU
-    } while (await isDuplicateTitle(title));
+    const title = await generateTitle(genre);
 
     // lyrics generation
 

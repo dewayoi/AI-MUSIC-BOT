@@ -29,11 +29,12 @@ async function generateSingleSongInternal(
   onProgress,
 ) {
   const timestamp = Date.now();
-  
+
   console.log(`\n[STEP] --- Song ${songIndex + 1}/${totalSongs} Start ---`);
-  
+
   console.log(`[STEP] Generating Title for genre: ${genre}...`);
-  const title = generateTitle(genre);
+  const title = await generateTitle(genre);
+
   console.log(`[STEP] Title: ${title}`);
 
   // Slug harus bersih agar tidak ENOENT saat mkdir
@@ -58,8 +59,9 @@ async function generateSingleSongInternal(
   console.log(`[STEP] Generating lyrics and metadata...`);
   const lyrics = (await generateLyrics(genre, mood)) || "No lyrics generated";
   const metadata = (await generateMetadata(title, genre, mood)) || {};
-  const visualPrompt = (await generateVisualPrompt(genre, mood)) || "abstract background";
-  
+  const visualPrompt =
+    (await generateVisualPrompt(genre, mood)) || "abstract background";
+
   console.log(`[STEP] Building final prompt...`);
   const finalPrompt = buildPrompt({
     title,
@@ -96,7 +98,9 @@ async function generateSingleSongInternal(
     if (fs.existsSync(tempAiPath)) {
       fs.copyFileSync(tempAiPath, thumbnailPath);
       thumbnailResult.imagePath = thumbnailPath;
-      try { fs.unlinkSync(tempAiPath); } catch (e) {}
+      try {
+        fs.unlinkSync(tempAiPath);
+      } catch (e) {}
       console.log(`[DONE] Thumbnail created: ${thumbnailPath}`);
     }
   } catch (e) {
@@ -120,7 +124,9 @@ async function generateSingleSongInternal(
     );
     if (fs.existsSync(tempImagePath)) {
       fs.copyFileSync(tempImagePath, imagePath);
-      try { fs.unlinkSync(tempImagePath); } catch (e) {}
+      try {
+        fs.unlinkSync(tempImagePath);
+      } catch (e) {}
       console.log(`[DONE] Image created: ${imagePath}`);
     }
 
@@ -129,7 +135,10 @@ async function generateSingleSongInternal(
     await generateVideo(imagePath, videoPath);
     console.log(`[DONE] Video rendered: ${videoPath}`);
   } catch (e) {
-    console.error(`[ERROR] Visual/Video generation failed for ${title}:`, e.message);
+    console.error(
+      `[ERROR] Visual/Video generation failed for ${title}:`,
+      e.message,
+    );
     if (onProgress)
       onProgress(`⚠️ Visual/Video failed for *${title}*, continuing...`);
   }
@@ -205,10 +214,12 @@ async function generateSingleSongInternal(
 // Fungsi yang diekspor untuk menghasilkan batch lagu
 async function generateBatch(genre, mood, total, onProgress) {
   console.log(`[BATCH] Starting batch generation for ${total} songs...`);
-  
+
   console.log(`[STEP] Generating content plan...`);
   const contentPlan = await generateContentPlan("youtube_lofi");
-  console.log(`[STEP] Content Plan: Genre=${contentPlan.genre}, Mood=${contentPlan.mood}`);
+  console.log(
+    `[STEP] Content Plan: Genre=${contentPlan.genre}, Mood=${contentPlan.mood}`,
+  );
 
   const targetGenre = contentPlan.genre || genre;
   const targetMood = contentPlan.mood || mood;
@@ -238,13 +249,13 @@ async function generateBatch(genre, mood, total, onProgress) {
         created_at: new Date(),
       });
     }
-    
+
     if (i < total - 1) {
-        console.log(`[STEP] Sleeping for ${config.BATCH_DELAY || 3000}ms...`);
-        await sleep(config.BATCH_DELAY || 3000);
+      console.log(`[STEP] Sleeping for ${config.BATCH_DELAY || 3000}ms...`);
+      await sleep(config.BATCH_DELAY || 3000);
     }
   }
-  
+
   console.log(`[BATCH] Completed. Generated ${generatedSongs.length} items.`);
   return generatedSongs;
 }

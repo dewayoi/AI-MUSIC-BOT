@@ -18,5 +18,8 @@
     "node-telegram-bot-api": "^0.67.0",
     "openai": "^6.39.0",
     "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "@gradio/client": "^2.2.1"
   }
 }

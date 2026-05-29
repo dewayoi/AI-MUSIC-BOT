@@ -1,27 +1,15 @@
-const groq = require("./groq");
+const { getMetadataProvider } = require("../providers/metadata");
 
-async function generateMetadata(
-  title,
-  genre,
-  mood
-) {
-  console.log(`[API] Requesting metadata from Groq for: ${title}...`);
-  const response =
-    await groq.chat.completions.create({
-
-      model: "llama-3.3-70b-versatile",
-
-      messages: [
-
-        {
-          role: "system",
-          content:
-            "You are a YouTube music SEO expert.",
-        },
-
-        {
-          role: "user",
-          content: `
+async function generateMetadata(title, genre, mood) {
+  const provider = getMetadataProvider();
+  const messages = [
+    {
+      role: "system",
+      content: "You are a YouTube music SEO expert.",
+    },
+    {
+      role: "user",
+      content: `
 Create YouTube metadata.
 
 Title:
@@ -39,15 +27,10 @@ Generate:
 2. Tags
 3. Thumbnail image prompt
 `,
-        },
-
-      ],
-
-    });
-
-  console.log(`[API] Metadata received.`);
-  return response.choices[0].message.content;
-
+    },
+  ];
+  const model = "llama-3.3-70b-versatile";
+  return provider.generateMetadata(messages, model);
 }
 
 module.exports = generateMetadata;

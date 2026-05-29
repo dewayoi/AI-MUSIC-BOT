@@ -3,11 +3,17 @@ module.exports = {
 
   OUTPUT_DIR: "songs",
 
-  AUDIO_PROVIDER: "dummy",
+  AUDIO_PROVIDER: "huggingFace",
 
-  IMAGE_PROVIDER: "dummy",
+  IMAGE_PROVIDER: "pollinations",
 
   VIDEO_PROVIDER: "ffmpeg",
+
+  LYRICS_PROVIDER: "groq",
+
+  METADATA_PROVIDER: "groq",
+
+  VISUAL_PROMPT_PROVIDER: "groq",
 
   GENRES: ["Synthwave", "LoFi", "Phonk", "EDM", "Ambient"],
 
