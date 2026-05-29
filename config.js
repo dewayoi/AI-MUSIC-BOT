@@ -1,5 +1,4 @@
 module.exports = {
-
   SONGS_PER_BATCH: 2,
 
   OUTPUT_DIR: "songs",
@@ -10,20 +9,9 @@ module.exports = {
 
   VIDEO_PROVIDER: "ffmpeg",
 
-  GENRES: [
-    "Synthwave",
-    "LoFi",
-    "Phonk",
-    "EDM",
-    "Ambient"
-  ],
+  GENRES: ["Synthwave", "LoFi", "Phonk", "EDM", "Ambient"],
 
-  MOODS: [
-    "Dark",
-    "Sad",
-    "Dreamy",
-    "Energetic",
-    "Emotional"
-  ]
+  MOODS: ["Dark", "Sad", "Dreamy", "Energetic", "Emotional"],
 
+  MEMORY_SOURCE: "sqlite",
 };

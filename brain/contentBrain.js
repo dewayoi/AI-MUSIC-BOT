@@ -7,7 +7,7 @@ function randomItem(array) {
   ];
 }
 
-function generateContentPlan(strategyName) {
+async function generateContentPlan(strategyName) {
 
   const strategy =
     strategies[strategyName];
@@ -20,7 +20,7 @@ function generateContentPlan(strategyName) {
       randomItem(strategy.genres);
     attempts++;
   } while (
-    isRecentlyUsedGenre(selectedGenre) && 
+    (await isRecentlyUsedGenre(selectedGenre)) && 
     attempts < 10 // Prevent infinite loop if all genres are "recent"
   );
 
