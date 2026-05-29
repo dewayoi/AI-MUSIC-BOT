@@ -1,43 +1,17 @@
-const db = require("../database/db");
+const dbService = require("./databaseService");
 
-function saveToDatabase(song) {
-
-  db.run(
-    `
-    INSERT INTO songs (
-      title,
-      genre,
-      mood,
-      lyrics,
-      metadata,
-      prompt,
-      audio_path,
-      video_path,
-      thumbnail_path,
-      status,
-      created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    [
-      song.title,
-      song.genre,
-      song.mood,
-      song.lyrics,
-      typeof song.metadata === 'object' ? JSON.stringify(song.metadata) : song.metadata,
-      song.prompt,
-      song.audioPath,
-      song.videoPath,
-      song.thumbnailPath,
-      "ready",
-      song.created_at,
-    ],
-    (err) => {
-      if (err) {
-        console.error("❌ Database Insert Error:", err.message);
-      }
-    }
-  );
-
+/**
+ * Saves a song to the configured database (SQLite or JSON)
+ * @param {Object} song - The song data object
+ */
+async function saveToDatabase(song) {
+  try {
+    await dbService.saveSong(song);
+  } catch (err) {
+    console.error("❌ Failed to save song to database:", err.message);
+    // We don't throw here to prevent crashing the generation flow, 
+    // but the error is logged centrally.
+  }
 }
 
 module.exports = saveToDatabase;
