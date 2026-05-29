@@ -14,4 +14,6 @@ module.exports = {
   MOODS: ["Dark", "Sad", "Dreamy", "Energetic", "Emotional"],
 
   MEMORY_SOURCE: "sqlite",
+
+  BATCH_DELAY: 3000,
 };

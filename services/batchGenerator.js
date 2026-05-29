@@ -223,7 +223,11 @@ async function generateBatch(genre, mood, total, onProgress) {
         created_at: new Date(),
       });
     }
-    await sleep(3000);
+    
+    if (i < total - 1) {
+        console.log(`[STEP] Sleeping for ${config.BATCH_DELAY || 3000}ms...`);
+        await sleep(config.BATCH_DELAY || 3000);
+    }
   }
   return generatedSongs;
 }
