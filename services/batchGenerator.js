@@ -7,7 +7,7 @@ const generateVisualPrompt = require("./visualPromptGenerator");
 const { buildThumbnailPrompt } = require("../thumbnail/buildThumbnailPrompt");
 const { buildPrompt } = require("../prompts/buildPrompt");
 const generateImage = require("./imageGenerator");
-const generateVideo = require("./videoGenerator");
+const {renderVideo} = require("../providers/video/ffmpegProvider");
 const { getAudioProvider } = require("../providers/audio");
 const { getImageProvider } = require("../providers/image");
 const saveOutput = require("./saveOutput");
@@ -22,19 +22,21 @@ function sleep(ms) {
 
 // Fungsi internal untuk menghasilkan satu lagu, menggunakan genre dan mood yang diberikan
 async function generateSingleSongInternal(songIndex, totalSongs, genre, mood, contentPlan, onProgress) {
-    const title = generateTitle(); // Use generateTitle function
+    const title = await generateTitle(genre, mood); // Use generateTitle function
 
     console.log(`\n--- Song ${songIndex + 1}/${totalSongs} ---`);
     if (onProgress) onProgress(`⏳ Processing song ${songIndex + 1}/${totalSongs}: *${title}*`);
 
     // 0. PREPARASI FOLDER
     // Slug harus bersih agar tidak ENOENT saat mkdir
+    const datePrefix = new Date().toISOString().split('T')[0].replace(/-/g, '');
     const slug = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
 
-    const songFolder = path.join(process.cwd(), "songs", slug);
+    const folderName = `${datePrefix}_${slug}`;
+    const songFolder = path.join(process.cwd(), "songs", folderName);
     if (!fs.existsSync(songFolder)) {
       fs.mkdirSync(songFolder, { recursive: true });
     }
@@ -83,22 +85,21 @@ async function generateSingleSongInternal(songIndex, totalSongs, genre, mood, co
     const videoPath = path.join(process.cwd(), "outputs", "videos", `${slug}.mp4`);
     
     try {
-      // Image
+      //Image
+      console.log(`🎨 Generating image for: ${title}`);
       await generateImage(visualPrompt, slug);
-      
-      // Video
-      const videoDir = path.dirname(videoPath);
-      if (!fs.existsSync(videoDir)) {
-        fs.mkdirSync(videoDir, { recursive: true });
-      }
-      await generateVideo(imagePath, videoPath);
     } catch (e) {
-      console.error(`❌ Visual generation failed for ${title}:`, e.message);
+      console.error(`❌ Image generation failed for ${title}:`, e.message);
       if (onProgress) onProgress(`⚠️ Visual/Video failed for *${title}*, continuing...`);
     }
 
-    // Audio
+    // Pre-define variables for section 4
     let audioResult = { audioPath: null, status: "pending" };
+    let videoResult = null;
+    let finalAudioPath = null;
+    let finalVideoPath = null;
+
+    // Audio Generation
     try {
       const audioProvider = getAudioProvider();
       audioResult = await audioProvider.generateAudio({
@@ -112,27 +113,28 @@ async function generateSingleSongInternal(songIndex, totalSongs, genre, mood, co
       if (onProgress) onProgress(`⚠️ Audio failed for *${title}*`);
     }
 
-    // 3. STORAGE ORGANIZATION
-    let finalAudioPath = null;
-    let finalVideoPath = null;
-
-    try {
-      if (videoPath && fs.existsSync(videoPath)) {
-        finalVideoPath = path.join(songFolder, "video.mp4");
-        fs.copyFileSync(videoPath, finalVideoPath);
-      }
-    } catch (err) {
-      console.error("Video copy failed:", err.message);
-    }
-
+    // 3. VIDEO GENERATION (Merging Image + Audio)
     try {
       if (audioResult && audioResult.audioPath && fs.existsSync(audioResult.audioPath)) {
         const audioExtension = path.extname(audioResult.audioPath);
         finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
         fs.copyFileSync(audioResult.audioPath, finalAudioPath);
+
+        const audioStats = fs.statSync(finalAudioPath);
+        console.log(`🎵 Audio file for video: ${finalAudioPath} (${(audioStats.size / 1024).toFixed(2)} KB)`);
+
+        if (fs.existsSync(imagePath) && audioStats.size > 1000) { // Pastikan file audio tidak kosong
+          console.log(`🎬 Rendering video (Image + Audio) for: ${title}`);
+          finalVideoPath = path.join(songFolder, "video.mp4");
+          videoResult = await renderVideo({
+            imagePath: imagePath,
+            audioPath: finalAudioPath, // Pastikan menggunakan file yang sudah di-copy ke folder lagu
+            outputPath: finalVideoPath
+          });
+        }
       }
     } catch (err) {
-      console.error("Audio copy failed:", err.message);
+      console.error("Video/Audio processing failed:", err.message);
     }
 
     // 4. PERSISTENCE (Save to Database & Files)
@@ -141,8 +143,8 @@ async function generateSingleSongInternal(songIndex, totalSongs, genre, mood, co
       title, genre, mood, lyrics, metadata, visualPrompt,
       prompt: finalPrompt,
       audioPath: finalAudioPath,
-      audioStatus: audioResult.status,
-      videoPath: finalVideoPath,
+      audioStatus: audioResult ? audioResult.status : "failed",
+      videoPath: videoResult ? videoResult.videoPath : null,
       thumbnailPrompt,
       thumbnailPath: thumbnailResult.imagePath || thumbnailPath,
       status: "completed",

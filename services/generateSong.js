@@ -1,6 +1,6 @@
 const { generateContentPlan } = require("../brain/contentBrain");
 const { isDuplicateTitle } = require("../brain/memory");
-const { generateTitle } = require("../generators/titleGenerator");
+const generateTitle = require("./titleGenerator");
 const contentPlan = generateContentPlan("youtube_lofi");
 const genre = contentPlan.genre;
 const mood = contentPlan.mood;
@@ -19,7 +19,7 @@ async function generateSong() {
         const MAX_ATTEMPTS = 10; // Batasi percobaan untuk menghindari infinite loop
 
         do {
-            title = generateTitle(genre);
+            title = await generateTitle(genre, mood);
             attempts++;
             if (attempts >= MAX_ATTEMPTS) {
                 console.warn("Mencapai batas percobaan untuk generate judul unik. Menggunakan judul duplikat.");

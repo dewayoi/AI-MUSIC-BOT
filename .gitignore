@@ -3,3 +3,4 @@ node_modules
 output
 database/music.db
 old
+client_secret.json

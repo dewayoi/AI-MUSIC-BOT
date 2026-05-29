@@ -7,7 +7,7 @@ async function generateImage(prompt, filename) {
   const seed = Math.floor(Math.random() * 1000000);
   const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
     prompt
-  )}?width=1024&height=768&nologo=true&seed=${seed}`;
+  )}?width=600&height=600&nologo=true&seed=${seed}`;
 
   // Download gambar hasil generate
   let response;

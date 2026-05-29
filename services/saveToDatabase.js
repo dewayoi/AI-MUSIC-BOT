@@ -1,6 +1,8 @@
 const db = require("../database/db");
 
 function saveToDatabase(song) {
+  console.log("Saving song to database:", song.title);
+  console.log("Metadata being saved:", song.metadata);
 
   db.run(
     `
@@ -34,6 +36,8 @@ function saveToDatabase(song) {
     (err) => {
       if (err) {
         console.error("❌ Database Insert Error:", err.message);
+      } else {
+        console.log(`✅ Song "${song.title}" saved successfully to database.`);
       }
     }
   );

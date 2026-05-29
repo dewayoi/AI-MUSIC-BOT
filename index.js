@@ -59,7 +59,7 @@ bot.onText(/\/generate(?:@\S+)?(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
 		const genre = match[1];
 		const mood = match[2];
 		bot.sendMessage(msg.chat.id, "Generating...");
-		const title = generateTitle();
+		const title = await generateTitle(genre, mood);
 		const lyrics = await generateLyrics(genre, mood);
 		bot.sendMessage(msg.chat.id, "Generating lyrics...");
 		const basePrompt = loadPrompt(genre);
