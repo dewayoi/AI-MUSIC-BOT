@@ -1,7 +1,7 @@
 const OpenAI = require("openai");
-
+const config = require("../../config");
 const client = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
+  apiKey: config.OPENROUTER_API_KEY,
 
   baseURL: "https://openrouter.ai/api/v1",
 });

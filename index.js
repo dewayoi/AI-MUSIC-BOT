@@ -9,13 +9,14 @@ const generateLyrics = require("./services/lyricsGenerator");
 const generateBatch = require("./services/batchGenerator");
 const { addToQueue, getQueue } = require("./services/queue");
 const dbService = require("./services/databaseService");
+const config = require("./config");
 
-if (!process.env.BOT_TOKEN) {
+if (!config.BOT_TOKEN) {
   console.error("❌ ERROR: BOT_TOKEN tidak ditemukan di file .env!");
   process.exit(1);
 }
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
+const bot = new TelegramBot(config.BOT_TOKEN, {
   polling: false,
 });
 

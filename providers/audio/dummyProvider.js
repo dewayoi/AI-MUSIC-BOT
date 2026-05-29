@@ -1,9 +1,9 @@
 const path = require("path");
-
+const config = require("../../config");
 async function generateAudio({ title, genre, mood, lyrics }) {
   console.log("Generating audio with Dummy Provider");
 
-  if (process.env.USE_DUMMY_AUDIO === "true") {
+  if (config.USE_DUMMY_AUDIO === "true") {
     return {
       audioPath: path.join(process.cwd(), "assets", "dummy.wav"),
       status: "dummy_asset",

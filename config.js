@@ -22,4 +22,10 @@ module.exports = {
   MEMORY_SOURCE: "sqlite",
 
   BATCH_DELAY: 3000,
+
+  BOT_TOKEN: process.env.BOT_TOKEN,
+  GROQ_API_KEY: process.env.GROQ_API_KEY,
+  USE_DUMMY_AUDIO: process.env.USE_DUMMY_AUDIO,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
 };
