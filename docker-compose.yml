@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  ai-music-bot:
+    build: .
+    container_name: ai-music-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./songs:/app/songs
+      - ./outputs:/app/outputs
+      - ./database:/app/database
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: ai-music-bot-network
