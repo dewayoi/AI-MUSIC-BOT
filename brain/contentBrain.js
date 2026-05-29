@@ -13,12 +13,15 @@ function generateContentPlan(strategyName) {
     strategies[strategyName];
 
   let selectedGenre;
+  let attempts = 0;
 
   do {
     selectedGenre =
       randomItem(strategy.genres);
+    attempts++;
   } while (
-    isRecentlyUsedGenre(selectedGenre)
+    isRecentlyUsedGenre(selectedGenre) && 
+    attempts < 10 // Prevent infinite loop if all genres are "recent"
   );
 
   return {

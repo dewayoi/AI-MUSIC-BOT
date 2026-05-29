@@ -40,16 +40,20 @@ async function generateSingleSongInternal(songIndex, totalSongs, genre, mood, co
     }
 
     // 1. DATA GENERATION
-    const lyrics = await generateLyrics(genre, mood);
-    const metadata = await generateMetadata(title, genre, mood);
-    const visualPrompt = await generateVisualPrompt(genre, mood);
-    const imageProvider = getImageProvider();
+    const lyrics = (await generateLyrics(genre, mood)) || "No lyrics generated";
+    const metadata = (await generateMetadata(title, genre, mood)) || {};
+    const visualPrompt = (await generateVisualPrompt(genre, mood)) || "abstract background";
     const finalPrompt = buildPrompt({
       title,
       genre,
       mood,
       ...contentPlan
     });
+
+    // 1.1 SIMPAN LIRIK & METADATA AWAL (Fail-safe)
+    // Kita simpan lirik segera setelah digenerate agar tidak hilang jika aset gagal
+    fs.writeFileSync(path.join(songFolder, "lyrics.txt"), lyrics || "");
+    console.log(`📝 Lyrics saved for: ${title}`);
 
     const thumbnailPrompt =buildThumbnailPrompt({
       genre,
@@ -59,50 +63,77 @@ async function generateSingleSongInternal(songIndex, totalSongs, genre, mood, co
 
     const thumbnailPath = path.join(songFolder,"thumbnail.png");
     
-    // Gunakan provider secara aman
+    // FIX: Gunakan AI generator langsung untuk thumbnail agar tidak dummy
     let thumbnailResult = { imagePath: null };
     try {
-        const imageProvider = getImageProvider();
-        thumbnailResult = await imageProvider.generateImage({
-            prompt: thumbnailPrompt,
-            outputPath: thumbnailPath
-        }) || thumbnailResult;
+        // Panggil generateImage AI dan arahkan output langsung ke folder lagu
+        await generateImage(thumbnailPrompt, "thumbnail-temp"); 
+        const tempAiPath = path.join(process.cwd(), "outputs", "images", "thumbnail-temp.png");
+        if (fs.existsSync(tempAiPath)) {
+            fs.copyFileSync(tempAiPath, thumbnailPath);
+            thumbnailResult.imagePath = thumbnailPath;
+        }
     } catch (e) {
-        console.warn("Thumbnail generation failed, skipping...");
+        console.warn("AI Thumbnail generation failed, skipping visual asset...", e.message);
     }
 
     // 2. ASSET GENERATION (Image -> Video -> Audio)
-    // Image
-    await generateImage(visualPrompt, title);
-    const imagePath = path.join(process.cwd(), "outputs", "images", `${title}.png`);
+    // Gunakan 'slug' untuk filename agar aman dari karakter ilegal di Windows (?, :, |, etc)
+    const imagePath = path.join(process.cwd(), "outputs", "images", `${slug}.png`);
+    const videoPath = path.join(process.cwd(), "outputs", "videos", `${slug}.mp4`);
     
-    // Video
-    const videoPath = path.join(process.cwd(), "outputs", "videos", `${title}.mp4`);
-    const videoDir = path.dirname(videoPath);
-    if (!fs.existsSync(videoDir)) {
-      fs.mkdirSync(videoDir, { recursive: true });
+    try {
+      // Image
+      await generateImage(visualPrompt, slug);
+      
+      // Video
+      const videoDir = path.dirname(videoPath);
+      if (!fs.existsSync(videoDir)) {
+        fs.mkdirSync(videoDir, { recursive: true });
+      }
+      await generateVideo(imagePath, videoPath);
+    } catch (e) {
+      console.error(`❌ Visual generation failed for ${title}:`, e.message);
+      if (onProgress) onProgress(`⚠️ Visual/Video failed for *${title}*, continuing...`);
     }
-    await generateVideo(imagePath, videoPath);
 
     // Audio
-    const audioProvider = getAudioProvider();
-    const audioResult = await audioProvider.generateAudio({
-      title,
-      genre,
-      mood,
-      lyrics,
-    });
+    let audioResult = { audioPath: null, status: "pending" };
+    try {
+      const audioProvider = getAudioProvider();
+      audioResult = await audioProvider.generateAudio({
+        title,
+        genre,
+        mood,
+        lyrics
+      }) || audioResult;
+    } catch (e) {
+      console.error(`❌ Audio generation failed for ${title}:`, e.message);
+      if (onProgress) onProgress(`⚠️ Audio failed for *${title}*`);
+    }
 
     // 3. STORAGE ORGANIZATION
-    const audioExtension = path.extname(audioResult.audioPath);
-    const finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
-    const finalVideoPath = path.join(songFolder, "video.mp4");
+    let finalAudioPath = null;
+    let finalVideoPath = null;
 
-    // Salin file ke folder tujuan (Fix bug destDir & ENOENT)
-    if (fs.existsSync(videoPath)) {
-      fs.copyFileSync(videoPath, finalVideoPath);
+    try {
+      if (videoPath && fs.existsSync(videoPath)) {
+        finalVideoPath = path.join(songFolder, "video.mp4");
+        fs.copyFileSync(videoPath, finalVideoPath);
+      }
+    } catch (err) {
+      console.error("Video copy failed:", err.message);
     }
-    fs.copyFileSync(audioResult.audioPath, finalAudioPath);
+
+    try {
+      if (audioResult && audioResult.audioPath && fs.existsSync(audioResult.audioPath)) {
+        const audioExtension = path.extname(audioResult.audioPath);
+        finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
+        fs.copyFileSync(audioResult.audioPath, finalAudioPath);
+      }
+    } catch (err) {
+      console.error("Audio copy failed:", err.message);
+    }
 
     // 4. PERSISTENCE (Save to Database & Files)
     const songData = {
@@ -113,19 +144,21 @@ async function generateSingleSongInternal(songIndex, totalSongs, genre, mood, co
       audioStatus: audioResult.status,
       videoPath: finalVideoPath,
       thumbnailPrompt,
-      thumbnailPath: thumbnailResult.imagePath,
+      thumbnailPath: thumbnailResult.imagePath || thumbnailPath,
       status: "completed",
       created_at: new Date(),
     };
 
-    // Simpan file teks di folder lagu secara aman
-    fs.writeFileSync(path.join(songFolder, "lyrics.txt"), lyrics || "");
-    fs.writeFileSync(path.join(songFolder, "metadata.json"), JSON.stringify(songData, null, 2));
+    try {
+      fs.writeFileSync(path.join(songFolder, "metadata.json"), JSON.stringify(songData, null, 2));
+      saveOutput(songData);
+      saveToDatabase(songData);
+      console.log(`Successfully generated and saved: ${title}`);
+    } catch (dbErr) {
+      console.error("Failed to save song to database/json:", dbErr.message);
+      if (onProgress) onProgress(`⚠️ Data *${title}* folder created but DB save failed.`);
+    }
 
-    saveOutput(songData);
-    saveToDatabase(songData);
-
-      console.log(`Successfully generated: ${title}`);
     if (onProgress) onProgress(`✅ Done: *${title}*`)
     return songData;
   }

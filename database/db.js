@@ -17,6 +17,9 @@ db.serialize(() => {
       lyrics TEXT,
       prompt TEXT,
       metadata TEXT,
+      audio_path TEXT,
+      video_path TEXT,
+      thumbnail_path TEXT,
       
       status TEXT,
 

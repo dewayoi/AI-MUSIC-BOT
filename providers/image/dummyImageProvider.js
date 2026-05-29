@@ -1,5 +1,4 @@
 const fs = require("fs");
-const path = require("path");
 
 async function generateImage({
   prompt,
@@ -7,19 +6,35 @@ async function generateImage({
 }) {
 
   console.log(
-    "Generating thumbnail image..."
+    "Generating AI thumbnail..."
   );
 
-  // dummy placeholder file
+  const encodedPrompt =
+    encodeURIComponent(prompt);
+
+  const imageUrl =
+    `https://image.pollinations.ai/prompt/${encodedPrompt}`;
+
+  const response =
+    await fetch(imageUrl);
+
+  const arrayBuffer =
+    await response.arrayBuffer();
+
+  const buffer =
+    Buffer.from(arrayBuffer);
 
   fs.writeFileSync(
     outputPath,
-    "dummy image"
+    buffer
   );
 
   return {
+
     status: "success",
+
     imagePath: outputPath
+
   };
 
 }

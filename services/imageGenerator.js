@@ -10,11 +10,17 @@ async function generateImage(prompt, filename) {
   )}?width=1024&height=768&nologo=true&seed=${seed}`;
 
   // Download gambar hasil generate
-  const response = await axios({
-    url: imageUrl,
-    responseType: "arraybuffer",
-    timeout: 120000 // Beri waktu 60 detik untuk generate
-  });
+  let response;
+  try {
+    response = await axios({
+      url: imageUrl,
+      responseType: "arraybuffer",
+      timeout: 120000 // Beri waktu 120 detik
+    });
+  } catch (error) {
+    console.error(`❌ Failed to fetch AI Image: ${error.message}`);
+    throw error; // Lempar agar ditangkap oleh try-catch di batchGenerator
+  }
 
   // Buat folder jika belum ada
   const dir = "outputs/images";

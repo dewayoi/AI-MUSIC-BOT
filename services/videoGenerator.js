@@ -8,16 +8,19 @@ function generateVideo(
   return new Promise((resolve, reject) => {
 
     // Gabungkan command menjadi satu baris untuk stabilitas exec
-    const command = `ffmpeg -y -loop 1 -i "${imagePath}" -c:v libx264 -t 30 -pix_fmt yuv420p "${outputPath}"`;
+    const command = `ffmpeg -y -loop 1 -t 30 -i "${imagePath}" -vf "scale='trunc(iw/2)*2:trunc(ih/2)*2',format=yuv420p" -c:v libx264 -preset veryfast "${outputPath}"`;
 
-    exec(command, (error) => {
+    exec(command, (error, stdout, stderr) => {
 
       if (error) {
-        reject(error);
+        if (error.message.includes("not recognized")) {
+          reject(new Error("FFmpeg is not installed or not in your system PATH. Please install FFmpeg to enable video generation."));
+        } else {
+          reject(new Error(`FFmpeg Error: ${stderr || error.message}`));
+        }
       } else {
         resolve(outputPath);
       }
-
     });
 
   });

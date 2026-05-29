@@ -19,6 +19,9 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
 	polling: false, // Jangan jalankan polling secara otomatis di konstruktor
 });
 
+// Clean up any old webhooks to ensure polling works
+bot.deleteWebHook();
+
 // Verifikasi koneksi dan identitas bot
 bot.getMe().then((me) => {
 	console.log(`✅ Berhasil login!`);
@@ -43,7 +46,7 @@ bot.onText(/\/start(?:@\S+)?/, (msg) => {
 	);
 });
 
-bot.onText(/\/generate(?:\s+(\S+)\s+(\S+))?(?:@\S+)?/, async (msg, match) => {
+bot.onText(/\/generate(?:@\S+)?(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
 	try {
 		if (!match[1] || !match[2]) {
 			bot.sendMessage(
@@ -103,7 +106,7 @@ ${finalPrompt}
 	}
 });
 
-bot.onText(/\/batch(?:\s+(\S+)\s+(\S+)\s+(\d+))?(?:@\S+)?/, async (msg, match) => {
+bot.onText(/\/batch(?:@\S+)?(?:\s+(\S+)\s+(\S+)\s+(\d+))?/, async (msg, match) => {
 		try {
 			if (!match[1] || !match[2] || !match[3]) {
 				bot.sendMessage(
@@ -128,7 +131,7 @@ bot.onText(/\/batch(?:\s+(\S+)\s+(\S+)\s+(\d+))?(?:@\S+)?/, async (msg, match) =
 			// Jalankan tanpa 'await' jika ingin bot langsung bisa balas /help, 
 			// tapi karena kita butuh result, kita tetap pakai await dengan progres di dalamnya.
 			const results = await generateBatch(genre, mood, total, (progressMessage) => {
-				bot.sendMessage(msg.chat.id, progressMessage);
+				bot.sendMessage(msg.chat.id, progressMessage).catch(() => {});
 			});
 
 			bot.sendMessage(msg.chat.id, "✅ Batch selesai! Gunakan /library untuk melihat hasil.");
