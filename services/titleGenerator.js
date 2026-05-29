@@ -1,27 +1,41 @@
-const words1 = [
-  "Golden",
-  "Midnight",
-  "Broken",
-  "Silent",
-  "Lonely",
-];
+const titleStyles = {
+  LoFi: {
+    adjectives: ["Midnight", "Dreamy", "Rainy", "Silent", "Blue", "Lonely"],
 
-const words2 = [
-  "Dream",
-  "Smoke",
-  "Echo",
-  "Heartbeat",
-  "Sunset",
-];
+    nouns: ["Coffee", "Dreams", "Tokyo", "Rain", "Memories", "Night"],
+  },
 
-function generateTitle() {
-  const first =
-    words1[Math.floor(Math.random() * words1.length)];
+  Phonk: {
+    adjectives: ["Dark", "Broken", "Savage", "Ghost", "Bloody", "Shadow"],
 
-  const second =
-    words2[Math.floor(Math.random() * words2.length)];
+    nouns: ["Drift", "Signal", "Street", "Chaos", "Night", "Bass"],
+  },
 
-  return `${first} ${second}`;
+  Ambient: {
+    adjectives: ["Floating", "Eternal", "Silent", "Celestial", "Fading"],
+
+    nouns: ["Horizons", "Skies", "Echoes", "Light", "Dreams"],
+  },
+};
+
+function randomItem(array) {
+  return array[Math.floor(Math.random() * array.length)];
 }
 
-module.exports = generateTitle;
+function generateTitle(genre) {
+  const style = titleStyles[genre];
+
+  if (!style) {
+    return "Unknown Dreams";
+  }
+
+  const adjective = randomItem(style.adjectives);
+
+  const noun = randomItem(style.nouns);
+
+  return `${adjective} ${noun}`;
+}
+
+module.exports = {
+  generateTitle,
+};
