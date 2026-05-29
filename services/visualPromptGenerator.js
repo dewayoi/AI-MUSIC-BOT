@@ -4,7 +4,7 @@ async function generateVisualPrompt(
   genre,
   mood
 ) {
-
+  console.log(`[API] Requesting visual prompt from Groq...`);
   const response =
     await groq.chat.completions.create({
 
@@ -41,6 +41,7 @@ No text.
 
     });
 
+  console.log(`[API] Visual prompt received.`);
   return response.choices[0].message.content;
 
 }

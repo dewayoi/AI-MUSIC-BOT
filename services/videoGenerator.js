@@ -6,7 +6,7 @@ function generateVideo(
 ) {
 
   return new Promise((resolve, reject) => {
-
+    console.log(`[SHELL] Running FFmpeg to render video from ${imagePath}...`);
     // Gabungkan command menjadi satu baris untuk stabilitas exec
     const command = `ffmpeg -y -loop 1 -t 30 -i "${imagePath}" -vf "scale='trunc(iw/2)*2:trunc(ih/2)*2',format=yuv420p" -c:v libx264 -preset veryfast "${outputPath}"`;
 
@@ -19,6 +19,7 @@ function generateVideo(
           reject(new Error(`FFmpeg Error: ${stderr || error.message}`));
         }
       } else {
+        console.log(`[DONE] Video rendered: ${outputPath}`);
         resolve(outputPath);
       }
     });

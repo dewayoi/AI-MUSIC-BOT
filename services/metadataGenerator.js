@@ -5,7 +5,7 @@ async function generateMetadata(
   genre,
   mood
 ) {
-
+  console.log(`[API] Requesting metadata from Groq for: ${title}...`);
   const response =
     await groq.chat.completions.create({
 
@@ -45,6 +45,7 @@ Generate:
 
     });
 
+  console.log(`[API] Metadata received.`);
   return response.choices[0].message.content;
 
 }

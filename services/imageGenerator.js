@@ -2,12 +2,13 @@ const fs = require("fs");
 const axios = require("axios");
 
 async function generateImage(prompt, filename) {
+  console.log(`[API] Requesting image from Pollinations AI for: ${filename}...`);
   // Menggunakan Pollinations AI sebagai alternatif gratis tanpa API Key.
   // Kita tambahkan random seed agar gambar selalu unik setiap kali generate.
   const seed = Math.floor(Math.random() * 1000000);
   const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-    prompt
-  )}?width=1024&height=768&nologo=true&seed=${seed}`;
+    prompt,
+  )}?width=600&height=600&nologo=true&seed=${seed}`;
 
   // Download gambar hasil generate
   let response;
@@ -15,7 +16,7 @@ async function generateImage(prompt, filename) {
     response = await axios({
       url: imageUrl,
       responseType: "arraybuffer",
-      timeout: 120000 // Beri waktu 120 detik
+      timeout: 120000, // Beri waktu 120 detik
     });
   } catch (error) {
     console.error(`❌ Failed to fetch AI Image: ${error.message}`);
@@ -28,11 +29,9 @@ async function generateImage(prompt, filename) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  fs.writeFileSync(
-    `${dir}/${filename}.png`,
-    response.data
-  );
-
+  const filePath = `${dir}/${filename}.png`;
+  fs.writeFileSync(filePath, response.data);
+  console.log(`[DONE] Image saved to ${filePath}`);
 }
 
 module.exports = generateImage;

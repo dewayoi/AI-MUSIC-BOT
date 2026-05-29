@@ -29,8 +29,13 @@ async function generateSingleSongInternal(
   onProgress,
 ) {
   const timestamp = Date.now();
-  const title = generateTitle(genre);
   
+  console.log(`\n[STEP] --- Song ${songIndex + 1}/${totalSongs} Start ---`);
+  
+  console.log(`[STEP] Generating Title for genre: ${genre}...`);
+  const title = generateTitle(genre);
+  console.log(`[STEP] Title: ${title}`);
+
   // Slug harus bersih agar tidak ENOENT saat mkdir
   const slug = title
     .toLowerCase()
@@ -40,20 +45,22 @@ async function generateSingleSongInternal(
   const folderName = `${timestamp}-${slug}`;
   const songFolder = path.join(process.cwd(), "songs", folderName);
 
-  console.log(`\n--- Song ${songIndex + 1}/${totalSongs} --- `);
   if (onProgress)
     onProgress(`⏳ Processing song ${songIndex + 1}/${totalSongs}: *${title}*`);
 
   // 0. PREPARASI FOLDER
+  console.log(`[STEP] Preparing folder: ${songFolder}`);
   if (!fs.existsSync(songFolder)) {
     fs.mkdirSync(songFolder, { recursive: true });
   }
 
   // 1. DATA GENERATION
+  console.log(`[STEP] Generating lyrics and metadata...`);
   const lyrics = (await generateLyrics(genre, mood)) || "No lyrics generated";
   const metadata = (await generateMetadata(title, genre, mood)) || {};
-  const visualPrompt =
-    (await generateVisualPrompt(genre, mood)) || "abstract background";
+  const visualPrompt = (await generateVisualPrompt(genre, mood)) || "abstract background";
+  
+  console.log(`[STEP] Building final prompt...`);
   const finalPrompt = buildPrompt({
     title,
     genre,
@@ -63,8 +70,9 @@ async function generateSingleSongInternal(
 
   // 1.1 SIMPAN LIRIK & METADATA AWAL (Fail-safe)
   fs.writeFileSync(path.join(songFolder, "lyrics.txt"), lyrics || "");
-  console.log(`📝 Lyrics saved for: ${title}`);
+  console.log(`[DONE] Lyrics saved for: ${title}`);
 
+  console.log(`[STEP] Generating thumbnail prompt...`);
   const thumbnailPrompt = buildThumbnailPrompt({
     genre,
     mood,
@@ -76,6 +84,7 @@ async function generateSingleSongInternal(
   // thumbnail generation
   let thumbnailResult = { imagePath: null };
   try {
+    console.log(`[STEP] Generating AI Thumbnail...`);
     const tempThumbnailName = `thumbnail-${timestamp}`;
     await generateImage(thumbnailPrompt, tempThumbnailName);
     const tempAiPath = path.join(
@@ -87,14 +96,11 @@ async function generateSingleSongInternal(
     if (fs.existsSync(tempAiPath)) {
       fs.copyFileSync(tempAiPath, thumbnailPath);
       thumbnailResult.imagePath = thumbnailPath;
-      // Clean up temp
       try { fs.unlinkSync(tempAiPath); } catch (e) {}
+      console.log(`[DONE] Thumbnail created: ${thumbnailPath}`);
     }
   } catch (e) {
-    console.warn(
-      "AI Thumbnail generation failed, skipping visual asset...",
-      e.message,
-    );
+    console.error(`[ERROR] AI Thumbnail generation failed:`, e.message);
   }
 
   // 2. ASSET GENERATION (Image -> Video -> Audio)
@@ -103,6 +109,7 @@ async function generateSingleSongInternal(
 
   try {
     // Image
+    console.log(`[STEP] Generating Artwork image...`);
     const tempImageName = `image-${timestamp}`;
     await generateImage(visualPrompt, tempImageName);
     const tempImagePath = path.join(
@@ -113,17 +120,16 @@ async function generateSingleSongInternal(
     );
     if (fs.existsSync(tempImagePath)) {
       fs.copyFileSync(tempImagePath, imagePath);
-      // Clean up temp
       try { fs.unlinkSync(tempImagePath); } catch (e) {}
+      console.log(`[DONE] Image created: ${imagePath}`);
     }
 
     // Video
-    // We need a temp video path in outputs/videos if generateVideo expects it there
-    // but better if we can render directly to songFolder. 
-    // FFmpeg usually allows any path.
+    console.log(`[STEP] Rendering Video (FFmpeg)... `);
     await generateVideo(imagePath, videoPath);
+    console.log(`[DONE] Video rendered: ${videoPath}`);
   } catch (e) {
-    console.error(`❌ Visual generation failed for ${title}: `, e.message);
+    console.error(`[ERROR] Visual/Video generation failed for ${title}:`, e.message);
     if (onProgress)
       onProgress(`⚠️ Visual/Video failed for *${title}*, continuing...`);
   }
@@ -131,6 +137,7 @@ async function generateSingleSongInternal(
   // Audio
   let audioResult = { audioPath: null, status: "pending" };
   try {
+    console.log(`[STEP] Generating Audio...`);
     const audioProvider = getAudioProvider();
     audioResult =
       (await audioProvider.generateAudio({
@@ -139,15 +146,20 @@ async function generateSingleSongInternal(
         mood,
         lyrics,
       })) || audioResult;
-      
-    if (audioResult && audioResult.audioPath && fs.existsSync(audioResult.audioPath)) {
-        const audioExtension = path.extname(audioResult.audioPath);
-        const finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
-        fs.copyFileSync(audioResult.audioPath, finalAudioPath);
-        audioResult.finalPath = finalAudioPath;
+
+    if (
+      audioResult &&
+      audioResult.audioPath &&
+      fs.existsSync(audioResult.audioPath)
+    ) {
+      const audioExtension = path.extname(audioResult.audioPath);
+      const finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
+      fs.copyFileSync(audioResult.audioPath, finalAudioPath);
+      audioResult.finalPath = finalAudioPath;
+      console.log(`[DONE] Audio saved: ${finalAudioPath}`);
     }
   } catch (e) {
-    console.error(`❌ Audio generation failed for ${title}: `, e.message);
+    console.error(`[ERROR] Audio generation failed for ${title}:`, e.message);
     if (onProgress) onProgress(`⚠️ Audio failed for *${title}*`);
   }
 
@@ -171,26 +183,32 @@ async function generateSingleSongInternal(
   };
 
   try {
+    console.log(`[STEP] Saving metadata and database record...`);
     fs.writeFileSync(
       path.join(songFolder, "metadata.json"),
       JSON.stringify(songData, null, 2),
     );
     saveOutput(songData);
     saveToDatabase(songData);
-    console.log(`Successfully generated and saved: ${title}`);
+    console.log(`[DONE] Successfully saved: ${title}`);
   } catch (dbErr) {
-    console.error("Failed to save song to database/json:", dbErr.message);
+    console.error(`[ERROR] Persistence failed:`, dbErr.message);
     if (onProgress)
       onProgress(`⚠️ Data *${title}* folder created but DB save failed.`);
   }
 
   if (onProgress) onProgress(`✅ Done: *${title}*`);
+  console.log(`--- Song ${songIndex + 1}/${totalSongs} Finished ---\n`);
   return songData;
 }
 
 // Fungsi yang diekspor untuk menghasilkan batch lagu
 async function generateBatch(genre, mood, total, onProgress) {
+  console.log(`[BATCH] Starting batch generation for ${total} songs...`);
+  
+  console.log(`[STEP] Generating content plan...`);
   const contentPlan = await generateContentPlan("youtube_lofi");
+  console.log(`[STEP] Content Plan: Genre=${contentPlan.genre}, Mood=${contentPlan.mood}`);
 
   const targetGenre = contentPlan.genre || genre;
   const targetMood = contentPlan.mood || mood;
@@ -208,10 +226,7 @@ async function generateBatch(genre, mood, total, onProgress) {
       );
       generatedSongs.push(songData);
     } catch (error) {
-      console.error(
-        `Error generating song ${i + 1} (Genre: ${genre}, Mood: ${mood}):`,
-        error,
-      );
+      console.error(`[BATCH ERROR] Failed on song ${i + 1}:`, error);
       if (onProgress)
         onProgress(`❌ Gagal generate lagu ke-${i + 1}: ${error.message}`);
       generatedSongs.push({
@@ -229,6 +244,8 @@ async function generateBatch(genre, mood, total, onProgress) {
         await sleep(config.BATCH_DELAY || 3000);
     }
   }
+  
+  console.log(`[BATCH] Completed. Generated ${generatedSongs.length} items.`);
   return generatedSongs;
 }
 
