@@ -71,8 +71,8 @@ bot.onText(/\/generate(?:@\S+)?(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
 
     bot.sendMessage(msg.chat.id, "Generating...");
 
-    console.log(`[STEP] Generating Title...`);
-    const title = await generateTitle(genre);
+    console.log(`[STEP] Generating Title...:`, { genre, mood });
+    const title = await generateTitle(genre, mood);
     console.log(`[STEP] Title: ${title}`);
 
     console.log(`[STEP] Generating Lyrics...`);

@@ -32,8 +32,8 @@ async function generateSingleSongInternal(
 
   console.log(`\n[STEP] --- Song ${songIndex + 1}/${totalSongs} Start ---`);
 
-  console.log(`[STEP] Generating Title for genre: ${genre}...`);
-  const title = await generateTitle(genre);
+  console.log(`[STEP] Generating Title for:...`, { genre, mood });
+  const title = await generateTitle(genre, mood);
 
   console.log(`[STEP] Title: ${title}`);
 

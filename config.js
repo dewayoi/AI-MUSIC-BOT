@@ -3,7 +3,7 @@ module.exports = {
 
   OUTPUT_DIR: "songs",
 
-  AUDIO_PROVIDER: "huggingFace",
+  AUDIO_PROVIDER: "dummy",
 
   IMAGE_PROVIDER: "pollinations",
 
@@ -12,6 +12,8 @@ module.exports = {
   LYRICS_PROVIDER: "groq",
 
   METADATA_PROVIDER: "groq",
+
+  TITLE_PROVIDER: "groq",
 
   VISUAL_PROMPT_PROVIDER: "groq",
 

@@ -12,7 +12,7 @@ async function generateSong() {
     const genre = contentPlan.genre;
     const mood = contentPlan.mood;
 
-    const title = await generateTitle(genre);
+    const title = await generateTitle(genre, mood);
 
     // lyrics generation
 
