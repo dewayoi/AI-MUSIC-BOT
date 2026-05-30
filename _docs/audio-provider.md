@@ -1,0 +1,5 @@
+- https://soundraw.io/api
+- https://sonauto.ai/developers
+- https://modelslab.com/models/modelslab/ai-music-generator
+- https://openrouter.ai/
+- https://elevenlabs.io/pricing/api
