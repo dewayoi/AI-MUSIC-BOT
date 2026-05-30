@@ -1,17 +1,17 @@
 const fs = require("fs");
-const readline = require("readline");
-
-const { google } =
-  require("googleapis");
+const { google } = require("googleapis");
 
 const credentials =
   require("../client_secret.json");
+
+const token =
+  require("../token.json");
 
 const {
   client_secret,
   client_id,
   redirect_uris
-} = credentials.installed;
+} = credentials.installed || credentials.web; // Mendukung tipe 'installed' atau 'web'
 
 const oauth2Client =
   new google.auth.OAuth2(
@@ -20,59 +20,55 @@ const oauth2Client =
     redirect_uris[0]
   );
 
-const SCOPES = [
-  "https://www.googleapis.com/auth/youtube.upload"
-];
+oauth2Client.setCredentials(token);
 
-function authorize() {
+const youtube = google.youtube({
+  version: "v3",
+  auth: oauth2Client
+});
 
-  const authUrl =
-    oauth2Client.generateAuthUrl({
-
-      access_type: "offline",
-
-      scope: SCOPES
-
-    });
-
-  console.log(
-    "Authorize this app:"
-  );
-
-  console.log(authUrl);
-
-  const rl =
-    readline.createInterface({
-
-      input: process.stdin,
-
-      output: process.stdout
-
-    });
-
-  rl.question(
-    "Paste code here: ",
-    async (code) => {
-
-      rl.close();
-
-      const { tokens } =
-        await oauth2Client.getToken(code);
-
-      oauth2Client.setCredentials(tokens);
-
-      fs.writeFileSync(
-        "token.json",
-        JSON.stringify(tokens)
-      );
-
-      console.log(
-        "Token saved!"
-      );
-
+async function uploadVideo({
+  title,
+  description,
+  videoPath
+}) {
+  try {
+    // Pastikan file video ada sebelum diupload
+    if (!fs.existsSync(videoPath)) {
+      throw new Error(`Video file tidak ditemukan di path: ${videoPath}`);
     }
-  );
 
+    const response =
+      await youtube.videos.insert({
+        part: "snippet,status", // Menggunakan string koma untuk part
+        requestBody: {
+          snippet: {
+            title,
+            description
+          },
+          status: {
+            privacyStatus: "private"
+          }
+        },
+        media: {
+          body: fs.createReadStream(videoPath)
+        }
+      });
+
+    console.log("✅ Upload berhasil!");
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error saat upload ke YouTube:");
+    // Menampilkan detail error dari Google API jika ada
+    if (error.response) {
+      console.error(JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error(error.message);
+    }
+    throw error;
+  }
 }
 
-authorize();
+module.exports = {
+  uploadVideo
+};
