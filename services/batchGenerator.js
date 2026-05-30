@@ -7,7 +7,7 @@ const generateVisualPrompt = require("./visualPromptGenerator");
 const { buildThumbnailPrompt } = require("../thumbnail/buildThumbnailPrompt");
 const { buildPrompt } = require("../prompts/buildPrompt");
 const generateImage = require("./imageGenerator");
-const generateVideo = require("./videoGenerator");
+const { generateVideo } = require("./videoGenerator");
 const { getAudioProvider } = require("../providers/audio");
 const { getImageProvider } = require("../providers/image");
 const saveOutput = require("./saveOutput");
@@ -107,69 +107,113 @@ async function generateSingleSongInternal(
     console.error(`[ERROR] AI Thumbnail generation failed:`, e.message);
   }
 
-  // 2. ASSET GENERATION (Image -> Video -> Audio)
+  // 2. ASSET GENERATION (Image -> Audio -> Video)
   const imagePath = path.join(songFolder, "image.png");
   const videoPath = path.join(songFolder, "video.mp4");
 
+  let finalAudioPath = "";
+  let imageGenerationSuccess = false;
+  let audioResult = "";
+  // === STEP 1: IMAGE GENERATION ===
   try {
-    // Image
     console.log(`[STEP] Generating Artwork image...`);
     const tempImageName = `image-${timestamp}`;
     await generateImage(visualPrompt, tempImageName);
+
     const tempImagePath = path.join(
       process.cwd(),
       "outputs",
       "images",
       `${tempImageName}.png`,
     );
-    if (fs.existsSync(tempImagePath)) {
-      fs.copyFileSync(tempImagePath, imagePath);
-      try {
-        fs.unlinkSync(tempImagePath);
-      } catch (e) {}
-      console.log(`[DONE] Image created: ${imagePath}`);
-    }
 
-    // Video
-    console.log(`[STEP] Rendering Video (FFmpeg)... `);
-    await generateVideo(imagePath, videoPath);
-    console.log(`[DONE] Video rendered: ${videoPath}`);
+    // Correct async file checking and copying using fs.promises
+    await fs.promises.access(tempImagePath);
+    await fs.promises.copyFile(tempImagePath, imagePath);
+    imageGenerationSuccess = true;
+    console.log(`[DONE] Image created: ${imagePath}`);
+
+    // Safely delete temp image using fs.promises
+    fs.promises
+      .unlink(tempImagePath)
+      .catch((err) =>
+        console.warn(`[WARN] Failed to clean up temp image: ${err.message}`),
+      );
   } catch (e) {
-    console.error(
-      `[ERROR] Visual/Video generation failed for ${title}:`,
-      e.message,
-    );
-    if (onProgress)
-      onProgress(`⚠️ Visual/Video failed for *${title}*, continuing...`);
+    console.error(`[ERROR] Image generation failed for ${title}:`, e.message);
+    if (onProgress) onProgress(`⚠️ Image generation failed for *${title}*`);
   }
 
-  // Audio
-  let audioResult = { audioPath: null, status: "pending" };
+  // === STEP 2: AUDIO GENERATION ===
   try {
     console.log(`[STEP] Generating Audio...`);
     const audioProvider = getAudioProvider();
-    audioResult =
-      (await audioProvider.generateAudio({
-        title,
-        genre,
-        mood,
-        lyrics,
-      })) || audioResult;
 
-    if (
-      audioResult &&
-      audioResult.audioPath &&
-      fs.existsSync(audioResult.audioPath)
-    ) {
+    // Await the provider directly
+    audioResult = await audioProvider.generateAudio({
+      title,
+      genre,
+      mood,
+      lyrics,
+    });
+
+    if (audioResult && audioResult.audioPath) {
+      await fs.promises.access(audioResult.audioPath); // Verify file exists
       const audioExtension = path.extname(audioResult.audioPath);
-      const finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
-      fs.copyFileSync(audioResult.audioPath, finalAudioPath);
+      finalAudioPath = path.join(songFolder, `audio${audioExtension}`);
+
+      await fs.promises.copyFile(audioResult.audioPath, finalAudioPath);
       audioResult.finalPath = finalAudioPath;
       console.log(`[DONE] Audio saved: ${finalAudioPath}`);
+    } else {
+      throw new Error("Audio provider returned an empty or invalid path.");
     }
   } catch (e) {
     console.error(`[ERROR] Audio generation failed for ${title}:`, e.message);
-    if (onProgress) onProgress(`⚠️ Audio failed for *${title}*`);
+    if (onProgress) onProgress(`⚠️ Audio generation failed for *${title}*`);
+  }
+
+  // === STEP 3: VIDEO RENDERING ===
+  // Checks if image succeeded and finalAudioPath was populated from Step 2
+  console.log("[DEBUG] Verifying paths before FFmpeg:", {
+    imagePath,
+    finalAudioPath,
+    videoPath,
+  });
+
+  // 1. Strict sanitization check to block literal "undefined" strings or empty spaces
+  const isValidPath = (p) =>
+    p && typeof p === "string" && p.trim() !== "" && !p.includes("undefined");
+
+  if (
+    imageGenerationSuccess &&
+    isValidPath(finalAudioPath) &&
+    isValidPath(videoPath)
+  ) {
+    try {
+      console.log(`[STEP] Rendering Video (FFmpeg)... `);
+
+      // 2. Pass explicitly sanitized variables
+      await generateVideo(imagePath, finalAudioPath, videoPath);
+
+      console.log(`[DONE] Video rendered: ${videoPath}`);
+    } catch (e) {
+      console.error(`[ERROR] Video rendering failed for ${title}:`, e.message);
+      if (onProgress) onProgress(`⚠️ Video rendering failed for *${title}*`);
+    }
+  } else {
+    console.error(
+      `[SKIP] Video rendering aborted for ${title}. One or more paths are invalid!`,
+      {
+        imageGenerationSuccess,
+        finalAudioPath,
+        videoPath,
+      },
+    );
+    if (onProgress)
+      onProgress(
+        `⚠️ Video rendering skipped for *${title}* due to configuration errors.`,
+      );
   }
 
   // 4. PERSISTENCE (Save to Database & Files)

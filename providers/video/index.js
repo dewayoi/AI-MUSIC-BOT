@@ -1,5 +1,5 @@
 const config = require("../../config");
-const ffmpegProvider = require("./ffmpegProvider");
+const ffmpegProvider = require("./ffmpegProvider"); // This is now { generateVideo }
 
 function getVideoProvider() {
   switch (config.VIDEO_PROVIDER) {
