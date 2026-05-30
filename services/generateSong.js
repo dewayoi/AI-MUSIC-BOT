@@ -33,23 +33,35 @@ async function generateSong(manualGenre, manualMood, onProgress) {
         // 1. UNIQUE TITLE GENERATION
         let attempts = 0;
         const MAX_ATTEMPTS = 10;
+        const songsDir = path.join(process.cwd(), "songs");
+        if (!fs.existsSync(songsDir)) fs.mkdirSync(songsDir);
+
         do {
             title = await generateTitle(genre, mood);
+            const tempSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+            
+            // Cek apakah ada folder yang mengandung slug ini (deteksi in-progress)
+            const existingFolders = fs.readdirSync(songsDir);
+            const isFolderExist = existingFolders.some(folder => folder.endsWith(`_${tempSlug}`));
+            
+            // Cek database DAN cek keberadaan folder fisik
+            const isDuplicate = (await isDuplicateTitle(title)) || isFolderExist;
+
+            if (!isDuplicate) break;
+
             attempts++;
-            if (attempts >= MAX_ATTEMPTS) {
-                console.warn("Mencapai batas percobaan untuk generate judul unik. Menggunakan judul duplikat.");
-                break;
-            }
             await sleep(100);
-        } while (isDuplicateTitle(title));
+        } while (attempts < MAX_ATTEMPTS);
+
+        if (attempts >= MAX_ATTEMPTS) {
+            console.warn(`⚠️ Judul unik sulit ditemukan untuk ${genre}-${mood}. Menggunakan: ${title}`);
+        }
 
         if (onProgress) onProgress(`⏳ Memulai proses untuk: *${title}*`);
 
-        // 2. PREPARASI FOLDER (Format: YYYYMMDD_NN_title)
+        // 2. PREPARASI FOLDER (Format: YYYYMMDD_NN_title)        
         const datePrefix = new Date().toISOString().split('T')[0].replace(/-/g, '');
-        const songsDir = path.join(process.cwd(), "songs");
-        if (!fs.existsSync(songsDir)) fs.mkdirSync(songsDir);
-        
+
         // Hitung lagu hari ini untuk penomoran
         const todaySongs = fs.readdirSync(songsDir).filter(f => f.startsWith(datePrefix));
         const songNumber = String(todaySongs.length + 1).padStart(2, '0');
@@ -136,7 +148,7 @@ async function generateSong(manualGenre, manualMood, onProgress) {
             thumbnailPath: thumbnailPath,
             youtubeId: youtubeId,
             status: currentStatus,
-            created_at: new Date(),
+            created_at: new Date().toLocaleString("id-ID"),
         };
 
         // Simpan file metadata di folder (format JSON object agar mudah dibaca manusia)
@@ -158,7 +170,7 @@ async function generateSong(manualGenre, manualMood, onProgress) {
             genre, mood,
             status: "failed",
             error: error.message,
-            created_at: new Date(),
+            created_at: new Date().toLocaleString("id-ID"),
         };
         return failedSong;
     }

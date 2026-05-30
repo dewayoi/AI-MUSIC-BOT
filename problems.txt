@@ -1,0 +1,4 @@
+image path di musicdb null
+butuh status completion sejauh apa di telegram
+status jobs masih processing, completed 0. benerin urutan
+log di terminal disederhanakan. gak perlu youtube desc, tags, thumbnail prompt dll

@@ -1,63 +1,63 @@
-const fs = require("fs");
-const path = require("path");
+const db = require("../database/db");
 
-const dbPath = path.join(
-  __dirname,
-  "..",
-  "songs",
-  "database.json"
-);
+function isDuplicateTitle(title) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `
+      SELECT id
+      FROM songs
+      WHERE LOWER(title)=LOWER(?)
+      LIMIT 1
+      `,
+      [title],
+      (err, row) => {
+        if (err) {
+          reject(err);
+          return;
+        }
 
-function getHistory() {
-
-  if (!fs.existsSync(dbPath)) {
-    return [];
-  }
-
-  const rawData =
-    fs.readFileSync(dbPath);
-
-  return JSON.parse(rawData);
-
+        resolve(!!row);
+      }
+    );
+  });
 }
+
 function getRecentSongs(limit = 10) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `
+      SELECT *
+      FROM songs
+      ORDER BY id DESC
+      LIMIT ?
+      `,
+      [limit],
+      (err, rows) => {
+        if (err) {
+          reject(err);
+          return;
+        }
 
-  const history = getHistory();
-
-  return history.slice(-limit);
-
+        resolve(rows);
+      }
+    );
+  });
 }
-function isRecentlyUsedGenre(
+
+async function isRecentlyUsedGenre(
   genre,
   limit = 5
 ) {
-  const recentSongs =
-    getRecentSongs(limit);
+  const songs =
+    await getRecentSongs(limit);
 
-  return recentSongs.some(
+  return songs.some(
     song => song.genre === genre
   );
 }
 
-function isDuplicateTitle(title) {
-  const history = getHistory();
-
-  return history.some(song => {
-
-    if (!song.title) {
-      return false;
-    }
-
-    return (
-      song.title.toLowerCase() ===
-      title.toLowerCase()
-    );
-
-  });
-}
 module.exports = {
-  getHistory,
-  getRecentSongs,
-  isRecentlyUsedGenre,
   isDuplicateTitle,
+  getRecentSongs,
+  isRecentlyUsedGenre
 };

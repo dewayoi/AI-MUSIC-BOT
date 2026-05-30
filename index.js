@@ -3,10 +3,25 @@ require("dotenv").config();
 const fs = require("fs");
 const TelegramBot = require("node-telegram-bot-api");
 const loadPrompt = require("./services/promptLoader");
-const generateSong = require("./services/generateSong");
-const generateBatch = require("./services/batchGenerator");
-const { addToQueue, getQueue } = require("./services/queue");
+const generateSong = require("./services/generateSong"); //
+const { addToQueue, getQueueLength } = require("./services/queue");
+const { startQueueWorker } = require("./services/queueWorker");
 const db = require("./database/db");
+
+// Fungsi pembantu untuk mencatat Job Batch ke Database
+async function createJob(genre, mood, total) {
+	return new Promise((resolve, reject) => {
+		const now = new Date().toLocaleString("id-ID");
+		db.run(
+			`INSERT INTO jobs (genre, mood, total_songs, status, created_at) VALUES (?, ?, ?, ?, ?)`,
+			[genre, mood, total, "processing", now],
+			function (err) {
+				if (err) reject(err);
+				else resolve(this.lastID);
+			},
+		);
+	});
+}
 
 if (!process.env.BOT_TOKEN) {
 	console.error("❌ ERROR: BOT_TOKEN tidak ditemukan di file .env!");
@@ -87,41 +102,69 @@ bot.onText(/\/batch(?:@\S+)?(?:\s+(\S+)\s+(\S+)\s+(\d+))?/, async (msg, match) =
 			const genre = match[1];
 			const mood = match[2];
 			const total = parseInt(match[3]);
+			const jobId = await createJob(genre,mood,total);
+			console.log(`📥 [QUEUE] Menambahkan: ${genre} - ${mood} (${total} lagu)`);
 
 			// ADD TO QUEUE
 			addToQueue({
+				id: jobId,
 				genre,
 				mood,
-				total,
+				total
 			});
 
-			bot.sendMessage(msg.chat.id, `🚀 Memulai batch generation untuk ${total} lagu...`);
-
-			// Jalankan tanpa 'await' jika ingin bot langsung bisa balas /help, 
-			// tapi karena kita butuh result, kita tetap pakai await dengan progres di dalamnya.
-			const results = await generateBatch(genre, mood, total, (progressMessage) => {
-				bot.sendMessage(msg.chat.id, progressMessage).catch(() => {});
-			});
-
-			bot.sendMessage(msg.chat.id, "✅ Batch selesai! Gunakan /library untuk melihat hasil.");
+			bot.sendMessage(
+				msg.chat.id,
+				`✅ Job masuk queue.\n\nGenre: ${genre}\nMood: ${mood}\nTotal: ${total}`
+			);
 		} catch (error) {
 			console.error("Batch Error:", error);
 			bot.sendMessage(msg.chat.id, "❌ Terjadi error fatal saat batch generate.");
 		}
 	},
 );
-bot.onText(/\/queue/, (msg) => {
-	const queue = getQueue();
 
-	bot.sendMessage(msg.chat.id, `Queue: ${queue.length}`);
+bot.onText(/\/queue/, (msg) => {
+	bot.sendMessage(msg.chat.id,`Queue saat ini: ${getQueueLength()}`);
+});
+
+bot.onText(/\/jobs/, (msg) => {
+	db.all(
+		`
+		SELECT * FROM jobs 
+		ORDER BY id DESC 
+		LIMIT 10
+		`,
+		[],
+		(err, rows) => {
+			if (err) {
+				bot.sendMessage(msg.chat.id, "❌ Database error saat mengambil daftar job.");
+				console.error("Database Error (Jobs):", err.message);
+				return;
+			}
+
+			if (!rows || rows.length === 0) {
+				bot.sendMessage(msg.chat.id, "📭 Belum ada job di database.");
+				return;
+			}
+
+			let message = "📝 *10 JOB TERAKHIR:*\n\n";
+			rows.forEach((job) => {
+				message += `🆔 ID: ${job.id}\n`;
+				message += `🎵 ${job.genre} - ${job.mood}\n`;
+				message += `📊 Status: ${job.status}\n`;
+				message += `📈 Progress: ${job.completed_songs}/${job.total_songs} lagu\n\n`;
+			});
+
+			bot.sendMessage(msg.chat.id, message, { parse_mode: "Markdown" });
+		},
+	);
 });
 
 bot.onText(/\/library/, (msg) => {
 	db.all(
 		`
-		SELECT * FROM songs
-		ORDER BY id DESC
-		LIMIT 10
+		SELECT * FROM songs ORDER BY id DESC LIMIT 10
 		`,
 		[],
 		(err, rows) => {
@@ -203,6 +246,86 @@ Genre tersedia:
 	);
 });
 
+bot.onText(/\/stats/, (msg) => {
+
+    db.all(
+      `
+      SELECT
+      status,
+      COUNT(*) total
+      FROM songs
+      GROUP BY status
+      `,
+      [],
+      (err, rows) => {
+
+        if (err) {
+
+          bot.sendMessage(msg.chat.id,"Database error");
+
+          return;
+        }
+
+        let message =
+          "📊 SONG STATUS\n\n";
+
+        rows.forEach(row => {
+
+          message +=
+            `${row.status}: ${row.total}\n`;
+
+        });
+
+        bot.sendMessage(msg.chat.id,message);
+
+      }
+    );
+
+});
+
+bot.onText(/\/failed/, (msg) => {
+
+    db.all(
+      `
+      SELECT *
+      FROM songs
+      WHERE status='failed'
+      ORDER BY id DESC
+      LIMIT 10
+      `,
+      [],
+      (err, rows) => {
+
+        if (!rows.length) {
+
+          bot.sendMessage(msg.chat.id,"Tidak ada failed song");
+
+          return;
+        }
+
+        let message =
+          "❌ FAILED SONGS\n\n";
+
+        rows.forEach(song => {
+
+          message +=
+            `${song.id}
+${song.title}
+
+`;
+
+        });
+
+        bot.sendMessage(
+          msg.chat.id,
+          message
+        );
+
+      }
+    );
+
+});
+
 bot.onText(/\/help(?:@\S+)?/, (msg) => {
 	bot.sendMessage(
 		msg.chat.id,
@@ -212,6 +335,8 @@ COMMAND:
 /generate reggae heartbreak
 /generate lofi sad
 /genres
+/queue
+/jobs
 /help
 `,
 	);
@@ -226,8 +351,11 @@ bot.on("error", (error) => {
 });
 
 // Bersihkan webhook terlebih dahulu, baru mulai polling secara manual
-bot.deleteWebHook().then(() => {
-	console.log("🧹 Webhook lama dibersihkan.");
-	bot.startPolling({ restart: true });
-	console.log("🚀 Polling dimulai. Bot siap menerima pesan!");
-});
+console.log("🧹 Membersihkan webhook...");
+bot.deleteWebHook()
+	.catch((err) => console.log("⚠️ Info Webhook:", err.message))
+	.finally(() => {
+		bot.startPolling({ restart: true });
+		startQueueWorker();
+		console.log("🚀 Bot & Queue Worker telah aktif!");
+	});
