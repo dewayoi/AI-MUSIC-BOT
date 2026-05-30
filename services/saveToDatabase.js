@@ -30,7 +30,7 @@ function saveToDatabase(song) {
       song.audioPath,
       song.videoPath,
       song.thumbnailPath,
-      "ready",
+      song.status || "ready",
       song.created_at,
     ],
     (err) => {

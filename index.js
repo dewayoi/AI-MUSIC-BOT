@@ -3,9 +3,7 @@ require("dotenv").config();
 const fs = require("fs");
 const TelegramBot = require("node-telegram-bot-api");
 const loadPrompt = require("./services/promptLoader");
-const saveOutput = require("./services/saveOutput");
-const generateTitle = require("./services/titleGenerator");
-const generateLyrics = require("./services/lyricsGenerator");
+const generateSong = require("./services/generateSong");
 const generateBatch = require("./services/batchGenerator");
 const { addToQueue, getQueue } = require("./services/queue");
 const db = require("./database/db");
@@ -58,48 +56,19 @@ bot.onText(/\/generate(?:@\S+)?(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
 
 		const genre = match[1];
 		const mood = match[2];
-		bot.sendMessage(msg.chat.id, "Generating...");
-		const title = await generateTitle(genre, mood);
-		const lyrics = await generateLyrics(genre, mood);
-		bot.sendMessage(msg.chat.id, "Generating lyrics...");
-		const basePrompt = loadPrompt(genre);
-
-		if (!basePrompt) {
-			bot.sendMessage(msg.chat.id, "Genre tidak ditemukan.");
-			return;
-		}
-
-		const finalPrompt = `
-	TITLE:
-${title}
-
-${basePrompt}
-
-MOOD:
-${mood}
-`;
-		saveOutput({
-			title,
-			genre,
-			mood,
-			lyrics,
-			prompt: finalPrompt,
-			created_at: new Date(),
+		
+		bot.sendMessage(msg.chat.id, "🚀 Memulai AI Music Engine...");
+		
+		const song = await generateSong(genre, mood, (progress) => {
+			bot.sendMessage(msg.chat.id, progress).catch(() => {});
 		});
 
-		bot.sendMessage(
-			msg.chat.id,
-			`
-TITLE:
-${title}
+		if (song.status === "failed") {
+			bot.sendMessage(msg.chat.id, `❌ Gagal: ${song.error}`);
+		} else {
+			bot.sendMessage(msg.chat.id, `✅ Selesai: *${song.title}*\nFolder: \`songs/${song.title}\``, { parse_mode: "Markdown" });
+		}
 
-LYRICS:
-${lyrics}
-
-PROMPT:
-${finalPrompt}
-`,
-		);
 	} catch (error) {
 		console.log(error);
 		bot.sendMessage(msg.chat.id, "Terjadi error saat generate musik.");

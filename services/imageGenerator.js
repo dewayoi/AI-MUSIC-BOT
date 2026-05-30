@@ -1,7 +1,7 @@
 const fs = require("fs");
 const axios = require("axios");
 
-async function generateImage(prompt, filename) {
+async function generateImage(prompt, outputPath) {
   // Menggunakan Pollinations AI sebagai alternatif gratis tanpa API Key.
   // Kita tambahkan random seed agar gambar selalu unik setiap kali generate.
   const seed = Math.floor(Math.random() * 1000000);
@@ -23,16 +23,13 @@ async function generateImage(prompt, filename) {
   }
 
   // Buat folder jika belum ada
-  const dir = "outputs/images";
+  const dir = require("path").dirname(outputPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  fs.writeFileSync(
-    `${dir}/${filename}.png`,
-    response.data
-  );
-
+  // Simpan langsung ke path yang diminta
+  fs.writeFileSync(outputPath, response.data);
 }
 
 module.exports = generateImage;

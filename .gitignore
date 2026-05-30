@@ -1,6 +1,6 @@
 node_modules
 .env
-output
+outputs
 database/music.db
 old
 client_secret.json
